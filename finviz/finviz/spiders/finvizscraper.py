@@ -61,13 +61,26 @@ class FinvizscraperSpider(scrapy.Spider):
 
         # find and set the ticker/symbol
         ticker = soup.find("a", {"id" :"ticker"}).text
-
+        
+        # POPULATE MARKETCAP 
         # find and set the marketcap 
         marketCap = soup.find("td", text="Market Cap").find_next_sibling("td").text
+        
         # convert into number 
         marketCap = text_to_num(marketCap)
         
-        # TODO set the marketcap in the dataframe
+        #populate the df with the marketcap data 
+        df.loc[df['Symbol'] == ticker,'Market Cap'] = marketCap
+        
+        # TODO POPULATE CURRENT PRICE 
+        currentPrice = soup.find("td", text="Price").find_next_sibling("td").text
+        df.loc[df['Symbol'] == ticker,'Current Price'] = currentPrice
+        
+        # TODO POPULATE PRICE TO BOOK 
+        priceToBook = soup.find("td", text="P/B").find_next_sibling("td").text
+        df.loc[df['Symbol'] == ticker,'Price-to-Book'] = priceToBook
+        
+        # TODO POPULATE COMPANY NAME 
 
         print("")
         print("-------------")
@@ -75,6 +88,9 @@ class FinvizscraperSpider(scrapy.Spider):
         print("")
 
         print(marketCap)
+        #df.loc[df['Symbol'] == ticker]['Market Cap'] = marketCap
+        
+        print(df.loc[df['Symbol'] == ticker])
                 
         print("")
         print("#############")
