@@ -24,10 +24,7 @@ decimalConversion = {'M' : 6, 'B': 9}
 #load up the excel file 
 workbook = load_workbook(filename=filePath)
 df = pd.read_excel(filePath, "Valuations")
-#df.set_index('Symbol', inplace=True)
 
-#select sheet by name 
-#sheet = workbook["Valuations"]
 
 # set the URLs that need to be crawled
 # this is the unique set of Symbols from the excel doc 
@@ -53,16 +50,12 @@ class FinvizscraperSpider(scrapy.Spider):
     def parse(self, response):
         soup = BeautifulSoup(response.text, features="lxml")
 
-        #find the stats table
-        #tickerStats = soup.find("table", {"class":"snapshot-table2"})
-
-        #find all tabledata 
-        #statsTable = soup.find_all("table",{"class":"snapshot-table2"})
 
         # find and set the ticker/symbol
         ticker = soup.find("a", {"id" :"ticker"}).text
         
         # POPULATE MARKETCAP 
+        #::::::::::::::::::::::::::::
         # find and set the marketcap 
         marketCap = soup.find("td", text="Market Cap").find_next_sibling("td").text
         
@@ -73,44 +66,20 @@ class FinvizscraperSpider(scrapy.Spider):
         df.loc[df['Symbol'] == ticker,'Market Cap'] = marketCap
         
         # TODO POPULATE CURRENT PRICE 
+        #::::::::::::::::::::::::::::
         currentPrice = soup.find("td", text="Price").find_next_sibling("td").text
         df.loc[df['Symbol'] == ticker,'Current Price'] = currentPrice
         
         # TODO POPULATE PRICE TO BOOK 
+        #::::::::::::::::::::::::::::
         priceToBook = soup.find("td", text="P/B").find_next_sibling("td").text
         df.loc[df['Symbol'] == ticker,'Price-to-Book'] = priceToBook
         
         # TODO POPULATE COMPANY NAME 
+        #::::::::::::::::::::::::::::
 
-        print("")
-        print("-------------")
-        print("#############")
-        print("")
-
-        print(marketCap)
-        #df.loc[df['Symbol'] == ticker]['Market Cap'] = marketCap
-        
-        print(df.loc[df['Symbol'] == ticker])
-                
-        print("")
-        print("#############")
-        print("-------------")
-        print("")
     
         #for tickerStat in tickerStats:
             #how does beautifulsoup organize/structure the tabledata 
-
-# 
-#:::::::::::::::::::::::::::::::
-#
-# debug code :::::::::::::::::::
-#
-#:::::::::::::::::::::::::::::::
-#
-# 
-
-
-#df.at['IEP', "Market Cap"] = 13.2
-#print(df.loc['IEP'])
-#print(df['Market Cap'])
-#print(df['Symbol'].unique())
+    print(":::::::::::::::::::::::::::::::::::::::::::")
+    print(df)
