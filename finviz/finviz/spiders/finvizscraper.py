@@ -5,26 +5,25 @@
 
 ##### This code is built upon the tutorial here: https://www.babbling.fish/scraping-for-a-job/
 
-from typing import Text
 import scrapy
 import pandas as pd
 
-from bs4 import BeautifulSoup
 from scrapy.utils.python import retry_on_eintr
+from bs4 import BeautifulSoup
 from decimal import Decimal
 
-from openpyxl import workbook, load_workbook
-from openpyxl.worksheet import worksheet
-#from itertools import product
+from twisted.internet import reactor
+from scrapy.crawler import CrawlerRunner
+from scrapy.utils.log import configure_logging
+
+decimalConversion = {'M' : 6, 'B': 9}
 
 #TODO make the filename relative...
 filePath = "F:/workbench/crawler_finviz/venv/Sample.xlsm"
-decimalConversion = {'M' : 6, 'B': 9}
 
 #load up the excel file 
-workbook = load_workbook(filename=filePath)
+#workbook = load_workbook(filename=filePath)
 df = pd.read_excel(filePath, "Valuations")
-
 
 # set the URLs that need to be crawled
 # this is the unique set of Symbols from the excel doc 
@@ -46,6 +45,7 @@ class FinvizscraperSpider(scrapy.Spider):
     name = 'finvizscraper'
     allowed_domains = ['finviz.com']
     start_urls = urls #['http://finviz.com/']
+
 
     def parse(self, response):
         soup = BeautifulSoup(response.text, features="lxml")
@@ -75,11 +75,14 @@ class FinvizscraperSpider(scrapy.Spider):
         priceToBook = soup.find("td", text="P/B").find_next_sibling("td").text
         df.loc[df['Symbol'] == ticker,'Price-to-Book'] = priceToBook
         
+        print(df)
         # TODO POPULATE COMPANY NAME 
         #::::::::::::::::::::::::::::
 
-    
-        #for tickerStat in tickerStats:
-            #how does beautifulsoup organize/structure the tabledata 
-    print(":::::::::::::::::::::::::::::::::::::::::::")
-    print(df)
+# code to run the spider as a script 
+runner = CrawlerRunner()
+
+d = runner.crawl(FinvizscraperSpider)
+d.addBoth(lambda _: reactor.stop())
+
+reactor.run()
