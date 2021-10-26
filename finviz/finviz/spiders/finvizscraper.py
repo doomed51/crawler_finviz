@@ -1,10 +1,26 @@
 #####  README
+##### This code is built upon the tutorial here: 
+##### https://www.babbling.fish/scraping-for-a-job/
+#####
+#####       HOW TO RUN THE CRAWLER
+#####
 ##### Run from directory ./venv/finviz/finviz/spiders
 ##### Run with cmd: < scrapy crawl finvizscraper > 
-##### Don't forget to activate venv !!
+##### OR simply call finvizscraper.py from cmd
+#####
+#####       BASIC OVERVIEW OF CODE
+#####
+##### READS in 'Sample.xlsx file
+##### BUILDS the list of URLS to be crawled from the excel file
+##### CRAWLS individual stock pages on finviz.com
+##### CREATES  a panda dataframe 'valuations_df' of form:
+#####  (index) | Symbol | marketCap | target price | ... etc  
+#####
+##### WRITE the dataframe to 
+#####       an excel file using: writeScrapedDataToExcel
 
-##### This code is built upon the tutorial here: https://www.babbling.fish/scraping-for-a-job/
 
+from os import write
 import openpyxl
 import scrapy
 import pandas as pd
@@ -18,23 +34,27 @@ from twisted.internet import reactor
 from scrapy.crawler import CrawlerRunner
 from scrapy.utils.log import configure_logging
 
-decimalConversion = {'M' : 6, 'B': 9}
+#####
+# declaring global variables
+#####
 
 #TODO make the filename relative...
-# Load Valuations sheet in the excel file into a dataframe
+# Load Valuations sheet in the excel file into 
+# a dataframe 'valuations_df'
 filePath = "F:/workbench/crawler_finviz/venv/Sample.xlsm"
 valuations_df = pd.read_excel(filePath, "Valuations") 
-#valuations_df = openpyxl.load_workbook(filePath, keep_vba=True)
-
 
 # set the URLs that need to be crawled
-# this is the unique set of Symbols from the excel doc 
+# this is the unique set of Symbols from valuations_df
 urls = []
 for item in valuations_df['Symbol'].unique():
     urls.append(f"http://finviz.com/quote.ashx?t={item}")
 
+#####
 # converts 'B' and 'M' suffixes into a number 
 # from here: https://stackoverflow.com/questions/11896560/how-can-i-consistently-convert-strings-like-3-71b-and-4m-to-numbers-in-pytho
+#####
+decimalConversion = {'M' : 6, 'B': 9}
 def text_to_num(text):
         if text[-1] in decimalConversion:
             num, magnitude = text[:-1], text[-1]
@@ -42,7 +62,15 @@ def text_to_num(text):
         else:
             return Decimal(text)
 
-# spider definition
+#####
+# Spider definition -
+# Target Site: finviz > individual stock pages 
+# e.g. https://finviz.com/quote.ashx?t=msft&ty=c&ta=1&p=d
+# Notes:
+# - Builds a panda dataframe 'valuations_df' of form:
+#       (index) | Symbol | marketCap | current price | ... etc  
+# - Normalizes values with '%', or 'M'/'B' into dtype(float)
+#####
 class FinvizscraperSpider(scrapy.Spider):
     name = 'finvizscraper'
     allowed_domains = ['finviz.com']
@@ -51,60 +79,151 @@ class FinvizscraperSpider(scrapy.Spider):
 
     def parse(self, response):
         soup = BeautifulSoup(response.text, features="lxml")
-
-
+        
         # find and set the ticker/symbol
         ticker = soup.find("a", {"id" :"ticker"}).text
+        print("Scraped: " + ticker)
         
+        if ticker == 'ANY':
+            quickRatio = soup.find("td", text="Quick Ratio").find_next_sibling("td").text
+            print('ANY', quickRatio)
+
+
         # POPULATE MARKETCAP 
-        #::::::::::::::::::::::::::::
-        # find and set the marketcap 
         marketCap = soup.find("td", text="Market Cap").find_next_sibling("td").text
-        
-        # convert into number 
-        marketCap = text_to_num(marketCap)
-        
-        #populate the valuations_df with the marketcap data 
+        marketCap = float(text_to_num(marketCap))
         valuations_df.loc[valuations_df['Symbol'] == ticker,'Market Cap'] = marketCap
         
-        # TODO POPULATE CURRENT PRICE 
-        #::::::::::::::::::::::::::::
+        # POPULATE CURRENT PRICE 
         currentPrice = soup.find("td", text="Price").find_next_sibling("td").text
-        valuations_df.loc[valuations_df['Symbol'] == ticker,'Current Price'] = currentPrice
+        valuations_df.loc[valuations_df['Symbol'] == ticker,'Current Price'] = float(currentPrice)
         
-        # TODO POPULATE PRICE TO BOOK 
-        #::::::::::::::::::::::::::::
+        # POPULATE PRICE TO BOOK 
         priceToBook = soup.find("td", text="P/B").find_next_sibling("td").text
-        valuations_df.loc[valuations_df['Symbol'] == ticker,'Price-to-Book'] = priceToBook
+        valuations_df.loc[valuations_df['Symbol'] == ticker,'Price-to-Book'] = float(priceToBook)
         
-        #print(valuations_df)
-        # TODO POPULATE COMPANY NAME 
-        #::::::::::::::::::::::::::::
+        # 52W High
+        high_52w = soup.find("td", text="52W High").find_next_sibling("td").text
+        valuations_df.loc[valuations_df['Symbol'] == ticker,'52W High'] = float(high_52w.strip('%'))/100
 
-        print("Scraped: " + ticker)
+        # 52W Low
+        low_52w = soup.find("td", text="52W Low").find_next_sibling("td").text
+        valuations_df.loc[valuations_df['Symbol'] == ticker,'52W Low'] = float(low_52w.strip('%'))/100
+
+        # Sales 
+        sales = soup.find("td", text="Sales").find_next_sibling("td").text
+        if sales == '-':
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Sales'] = sales
+        else:
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Sales'] = float(text_to_num(sales))
+
+        # Income (ttm)
+        income = soup.find("td", text="Income").find_next_sibling("td").text
+        if income == '-':
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Income'] = income
+        else: 
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Income'] = float(text_to_num(income))
+
+        # Profit Margin
+        profitMargin = soup.find("td", text="Profit Margin").find_next_sibling("td").text
+        if profitMargin == '-':
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Profit Margin'] = profitMargin
+        else:
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Profit Margin'] = float(profitMargin.strip('%'))/100
+        
+        # Operating Margin
+        operatingMargin = soup.find("td", text="Oper. Margin").find_next_sibling("td").text
+        if operatingMargin == '-': #convert to float if it is not empty
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Operating Margin'] = operatingMargin
+        else:
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Operating Margin'] = float(operatingMargin.strip('%'))/100
+            
+       # Quick Ratio
+        quickRatio = soup.find("td", text="Quick Ratio").find_next_sibling("td").text
+        if quickRatio == '-':
+            valuations_df.loc[valuations_df['Symbol'] == ticker, 'Quick Ratio'] = quickRatio
+        else:
+            valuations_df.loc[valuations_df['Symbol'] == ticker, 'Quick Ratio'] = float(quickRatio)
+
+        # Current Ratio
+        currentRatio = soup.find("td", text="Current Ratio").find_next_sibling("td").text
+        if currentRatio == '-':
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Current Ratio'] = currentRatio
+        else:
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Current Ratio'] = float(currentRatio)
+
+        # Debt/Eq 
+        debtEquityRatio = soup.find("td", text="Debt/Eq").find_next_sibling("td").text
+        if debtEquityRatio == '-':
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Total Debt/Equity'] = debtEquityRatio
+        else:
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Total Debt/Equity'] = float(debtEquityRatio)
+
+        # Dividend Yield
+        dividendYield = soup.find("td", text="Dividend %").find_next_sibling("td").text
+        if dividendYield == '-':
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Dividend Yield'] = dividendYield
+        else:
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Dividend Yield'] = float(dividendYield.strip('%'))/100
+
+        # Target Price - Analyst mean price
+        targetPrice = soup.find("td", text="Target Price").find_next_sibling("td").text
+        if targetPrice == '-':
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Analyst Mean Target'] = targetPrice
+        else:
+            valuations_df.loc[valuations_df['Symbol'] == ticker,'Analyst Mean Target'] = float(targetPrice)
+
+
+        # less important
+        # TODO Cash/sh
+        # TODO EPS(ttm) + EPS past 5Y + EPS next Y + EPS next 5Y
+        # TODO ROE
+        # TODO Insider Own
+        # TODO Insider Trans
+        # TODO Sales past 5Y
+        # TODO Perf Year + Perf Quarter
+        # TODO P/E + Forward P/E
+        # TODO P/S
+        # TODO P/B
+        
+        # less important
+        # TODO Price 
+        # TODO sales/share -> Sales; Shs Outstanding | Shs Float
+        # TODO Sector
+        # TODO POPULATE COMPANY NAME 
+
+#####
+# Writes the dataframe 'valuations_df' created from scraping 
+# finviz to an excel file
+#####
+def writeScrapedDataToExcel():
+    # TODO fix index printing and symbol column name issue
+    myBook = openpyxl.load_workbook(filePath, keep_vba=True)
+
+    with pd.ExcelWriter(filePath, engine='openpyxl') as writer: 
+        writer.book = myBook
+        writer.sheets = dict((ws.title, ws) for ws in myBook.worksheets)
+        writer.vba_archive = myBook.vba_archive
+
+        valuations_df.to_excel(writer, sheet_name='Valuations', header=True, index=False)
+
+        writer.save()
 
 # code to run the spider as a script 
 print("Starting to scrape!!")
 print("")
+
 runner = CrawlerRunner()
 
 d = runner.crawl(FinvizscraperSpider)
 d.addBoth(lambda _: reactor.stop())
 
-reactor.run() #script will block here until the crawling is finished 
+reactor.run() #script will block here until the crawling is 
+# finished 
+
 print("")
 print ("Scraping complete!!")
 print("")
 
-# TODO fix index printing and symbol column name issue
-myBook = openpyxl.load_workbook(filePath, keep_vba=True)
+#writeScrapedDataToExcel()
 
-with pd.ExcelWriter(filePath, engine='openpyxl') as writer: 
-    writer.book = myBook
-    writer.sheets = dict((ws.title, ws) for ws in myBook.worksheets)
-    writer.vba_archive = myBook.vba_archive
-
-    #valuations_df.to_excel(writer, sheet_name='Valuations', header=True, index=True, startrow=1, startcol=0, columns=['A'])
-    valuations_df.to_excel(writer, sheet_name='Valuations', header=True, index=False)
-
-    writer.save()
