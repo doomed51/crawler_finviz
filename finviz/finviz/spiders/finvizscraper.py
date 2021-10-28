@@ -169,17 +169,21 @@ class FinvizscraperSpider(scrapy.Spider):
 
 
         # less important
+        # TODO add these to Dumb Score calculation
+
         # Cash/sh
-        # TODO add this to Dumb Score calculation
         nextVal = soup.find("td", text="Cash/sh").find_next_sibling("td").text
         populateColumn('Cash/sh', '', nextVal, ticker)
 
-        # TODO EPS(ttm) + EPS next Y
+        # EPS(ttm) + EPS next Y + EPS past 5Y
         nextVal = soup.find("td", text="EPS next Y").find_next_sibling("td").text
         populateColumn('EPS next Y', '', nextVal, ticker)
 
         nextVal = soup.find("td", text="EPS (ttm)").find_next_sibling("td").text
         populateColumn('EPS (ttm)', '', nextVal, ticker)
+
+        nextVal = soup.find("td", text="EPS past 5Y").find_next_sibling("td").text
+        populateColumn('EPS past 5Y', 'percent', nextVal, ticker)
        
         # ROE
         nextVal = soup.find("td", text="ROE").find_next_sibling("td").text
@@ -249,15 +253,24 @@ def computeScore_base():
     print("")
     
     myThresholds = {
-            "Current Ratio":    1.0,
-            "Oper. Margin": 0.1,
-            "Profit Margin":    0.7,
-            "Quick Ratio":      1.0,
-            "Dividend %":   0.01,
-            "Debt/Eq":0.7,
-            "P/B":    1 
+                "Current Ratio":    2.0,
+                "Cash/sh":          1.0,
+                "Debt/Eq":          0.7,
+                "Dividend %":       0.01,
+                "EPS past 5Y":      0.1,
+                "Oper. Margin":     0.1,
+                "Profit Margin":    0.7,
+                "P/B":              1.5,
+                "P/E":              2,
+                "P/S":              1.5,
+                "ROE":              0.15,
+                "Sales past 5Y":    0.1, 
+                "Quick Ratio":      1.0,
+            }
 
-    }
+    # TODO current sales 
+    # TODO insider ownership (tied to marketCap)
+    # TODO forward P/E vs. Current P/E
 
     valuations_df['Dumb Score'] = valuations_df.apply( lambda row: computeDumbScore(row, myThresholds), axis=1)
 
@@ -276,7 +289,7 @@ def computeDumbScore(row, thresholds):
     myScore = 0
     
     for item in thresholds:
-        if item in ['Debt/Eq', 'P/B']: # Lower is better
+        if item in ['Debt/Eq', 'P/B', 'P/E', 'P/S']: # Lower is better
             if float(row[item]) >= thresholds[item]:
                 myScore -= 1
             else:
