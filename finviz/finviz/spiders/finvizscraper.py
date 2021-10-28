@@ -266,12 +266,12 @@ def computeDumbScore(row, thresholds):
 #print("Starting to scrape!!")
 print("")
 
-#runner = CrawlerRunner()
+runner = CrawlerRunner()
 
-#d = runner.crawl(FinvizscraperSpider)
-#d.addBoth(lambda _: reactor.stop())
+d = runner.crawl(FinvizscraperSpider)
+d.addBoth(lambda _: reactor.stop())
 
-#reactor.run() #script will block here until the crawling is 
+reactor.run() #script will block here until the crawling is 
 
 # finished 
 
@@ -279,8 +279,7 @@ print("")
 print ("Scraping complete!!")
 print("")
 
-#writeScrapedDataToExcel()
-
+writeScrapedDataToExcel()
 
 computeScore_base()
 print(valuations_df)
