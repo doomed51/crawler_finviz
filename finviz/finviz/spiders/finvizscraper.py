@@ -51,6 +51,8 @@ for item in valuations_df['Symbol'].unique():
     urls.append(f"http://finviz.com/quote.ashx?t={item}")
 
 #####
+# Util function
+## 
 # converts 'B' and 'M' suffixes into a number 
 # from here: https://stackoverflow.com/questions/11896560/how-can-i-consistently-convert-strings-like-3-71b-and-4m-to-numbers-in-pytho
 #####
@@ -61,6 +63,31 @@ def text_to_num(text):
             return Decimal(num) * 10 ** decimalConversion[magnitude]
         else:
             return Decimal(text)
+#####
+# Util function
+## 
+# helper function to speed up implementation of new columns 
+# Populates valuations_df 
+#   
+# args:
+# textLabel: title of the column in DF 
+# valueType: percent, millionBillion, or empty string
+# scrapedValue: value from beautifulsoup.soup lookup
+# ticker: ticker being populated 
+#####
+def populateColumn(textLabel, valueType, scrapedValue, ticker):
+    #scrapedValue = soup.find("td", text=textLabel).find_next_sibling("td").text
+    if scrapedValue == '-':
+        valuations_df.loc[valuations_df['Symbol'] == ticker,textLabel] = 0
+    
+    elif valueType == 'millionBillion':
+        valuations_df.loc[valuations_df['Symbol'] == ticker,textLabel] = float(text_to_num(scrapedValue))
+    
+    elif valueType == 'percent':
+        valuations_df.loc[valuations_df['Symbol'] == ticker,textLabel] = float(scrapedValue.strip('%'))/100
+    
+    else:
+        valuations_df.loc[valuations_df['Symbol'] == ticker,textLabel] = float(scrapedValue)
 
 #####
 # Spider definition -
@@ -85,104 +112,114 @@ class FinvizscraperSpider(scrapy.Spider):
         print("Scraped: " + ticker)
         
         # 52W High
-        high_52w = soup.find("td", text="52W High").find_next_sibling("td").text
-        valuations_df.loc[valuations_df['Symbol'] == ticker,'52W High'] = float(high_52w.strip('%'))/100
-
+        nextVal = soup.find("td", text="52W High").find_next_sibling("td").text
+        populateColumn('52W High', 'percent', nextVal, ticker)
+        
         # 52W Low
-        low_52w = soup.find("td", text="52W Low").find_next_sibling("td").text
-        valuations_df.loc[valuations_df['Symbol'] == ticker,'52W Low'] = float(low_52w.strip('%'))/100
-
+        nextVal = soup.find("td", text="52W Low").find_next_sibling("td").text
+        populateColumn('52W Low', 'percent', nextVal, ticker)
+        
         # Current Price 
-        currentPrice = soup.find("td", text="Price").find_next_sibling("td").text
-        valuations_df.loc[valuations_df['Symbol'] == ticker,'Current Price'] = float(currentPrice)
-
+        nextVal = soup.find("td", text="Price").find_next_sibling("td").text
+        populateColumn('Current Price', '', nextVal, ticker)
+     
         # Current Ratio
-        currentRatio = soup.find("td", text="Current Ratio").find_next_sibling("td").text
-        if currentRatio == '-':
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Current Ratio'] = 0
-        else:
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Current Ratio'] = float(currentRatio)
+        nextVal = soup.find("td", text="Current Ratio").find_next_sibling("td").text
+        populateColumn('Current Ratio', '', nextVal, ticker)
         
         # Dividend Yield
-        dividendYield = soup.find("td", text="Dividend %").find_next_sibling("td").text
-        if dividendYield == '-':
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Dividend Yield'] = 0
-        else:
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Dividend Yield'] = float(dividendYield.strip('%'))/100
+        nextVal = soup.find("td", text="Dividend %").find_next_sibling("td").text
+        populateColumn('Dividend %', 'percent', nextVal, ticker)
 
         # Income (ttm)
-        income = soup.find("td", text="Income").find_next_sibling("td").text
-        if income == '-':
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Income'] = 0
-        else: 
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Income'] = float(text_to_num(income))
+        nextVal = soup.find("td", text="Income").find_next_sibling("td").text
+        populateColumn('Income', 'millionBillion', nextVal, ticker)
 
         # MARKETCAP 
-        marketCap = soup.find("td", text="Market Cap").find_next_sibling("td").text
-        marketCap = float(text_to_num(marketCap))
-        valuations_df.loc[valuations_df['Symbol'] == ticker,'Market Cap'] = marketCap
-        
-        # PRICE TO BOOK 
-        priceToBook = soup.find("td", text="P/B").find_next_sibling("td").text
-        valuations_df.loc[valuations_df['Symbol'] == ticker,'Price-to-Book'] = float(priceToBook)
-        
-        # Profit Margin
-        profitMargin = soup.find("td", text="Profit Margin").find_next_sibling("td").text
-        if profitMargin == '-':
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Profit Margin'] = 0
-        else:
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Profit Margin'] = float(profitMargin.strip('%'))/100
-
-        # Sales 
-        sales = soup.find("td", text="Sales").find_next_sibling("td").text
-        if sales == '-':
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Sales'] = 0
-        else:
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Sales'] = float(text_to_num(sales))
-
-        # Total Debt/Eq 
-        debtEquityRatio = soup.find("td", text="Debt/Eq").find_next_sibling("td").text
-        if debtEquityRatio == '-':
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Total Debt/Equity'] = 0
-        else:
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Total Debt/Equity'] = float(debtEquityRatio)
+        nextVal = soup.find("td", text="Market Cap").find_next_sibling("td").text
+        populateColumn('Market Cap', 'millionBillion', nextVal, ticker)
         
         # Operating Margin
-        operatingMargin = soup.find("td", text="Oper. Margin").find_next_sibling("td").text
-        if operatingMargin == '-': #convert to float if it is not empty
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Operating Margin'] = 0
-        else:
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Operating Margin'] = float(operatingMargin.strip('%'))/100
-            
-       # Quick Ratio
-        quickRatio = soup.find("td", text="Quick Ratio").find_next_sibling("td").text
-        if quickRatio == '-':
-            valuations_df.loc[valuations_df['Symbol'] == ticker, 'Quick Ratio'] = 0
-        else:
-            valuations_df.loc[valuations_df['Symbol'] == ticker, 'Quick Ratio'] = float(quickRatio)
+        nextVal = soup.find("td", text="Oper. Margin").find_next_sibling("td").text
+        populateColumn('Oper. Margin', 'percent', nextVal, ticker)
+      
+        # PRICE TO BOOK 
+        nextVal = soup.find("td", text="P/B").find_next_sibling("td").text
+        populateColumn('P/B', '', nextVal, ticker)
+        
+        # Profit Margin
+        nextVal = soup.find("td", text="Profit Margin").find_next_sibling("td").text
+        populateColumn('Profit Margin', 'percent', nextVal, ticker)
 
+        # Quick Ratio
+        nextVal = soup.find("td", text="Quick Ratio").find_next_sibling("td").text
+        populateColumn('Quick Ratio', '', nextVal, ticker)
+
+        # Sales 
+        nextVal = soup.find("td", text="Sales").find_next_sibling("td").text
+        populateColumn('Sales', 'millionBillion', nextVal, ticker)
+        
+        # Total Debt/Eq 
+        nextVal = soup.find("td", text="Debt/Eq").find_next_sibling("td").text
+        populateColumn('Debt/Eq', '', nextVal, ticker)
+       
         # Target Price - Analyst mean price
-        targetPrice = soup.find("td", text="Target Price").find_next_sibling("td").text
-        if targetPrice == '-':
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Analyst Mean Target'] = 0
-        else:
-            valuations_df.loc[valuations_df['Symbol'] == ticker,'Analyst Mean Target'] = float(targetPrice)
+        nextVal = soup.find("td", text="Target Price").find_next_sibling("td").text
+        populateColumn('Target Price', '', nextVal, ticker)
 
 
         # less important
-        # TODO Cash/sh
-        # TODO EPS(ttm) + EPS past 5Y + EPS next Y + EPS next 5Y
-        # TODO ROE
-        # TODO Insider Own
-        # TODO Insider Trans
-        # TODO Sales past 5Y
-        # TODO Perf Year + Perf Quarter
-        # TODO P/E + Forward P/E
-        # TODO P/S
-        # TODO P/B
+        # Cash/sh
+        # TODO add this to Dumb Score calculation
+        nextVal = soup.find("td", text="Cash/sh").find_next_sibling("td").text
+        populateColumn('Cash/sh', '', nextVal, ticker)
+
+        # TODO EPS(ttm) + EPS next Y
+        nextVal = soup.find("td", text="EPS next Y").find_next_sibling("td").text
+        populateColumn('EPS next Y', '', nextVal, ticker)
+
+        nextVal = soup.find("td", text="EPS (ttm)").find_next_sibling("td").text
+        populateColumn('EPS (ttm)', '', nextVal, ticker)
+       
+        # ROE
+        nextVal = soup.find("td", text="ROE").find_next_sibling("td").text
+        populateColumn('ROE', 'percent', nextVal, ticker )
+
+        # Insider Own
+        nextVal = soup.find("td", text="Insider Own").find_next_sibling("td").text
+        populateColumn('Insider Own', 'percent', nextVal, ticker)
+
+        # Insider Trans
+        nextVal = soup.find("td", text="Insider Trans").find_next_sibling("td").text
+        populateColumn('Insider Trans', 'percent', nextVal, ticker)
+
+        # Sales past 5Y
+        nextVal = soup.find("td", text="Sales past 5Y").find_next_sibling("td").text
+        populateColumn('Sales past 5Y', 'percent', nextVal, ticker)
+
+        # Perf Year + Perf Quarter
+        nextVal = soup.find("td", text="Perf Year").find_next_sibling("td").text
+        populateColumn('Perf Year', 'percent', nextVal, ticker)
+
+        nextVal = soup.find("td", text="Perf Quarter").find_next_sibling("td").text
+        populateColumn('Perf Quarter', 'percent', nextVal, ticker)
+
+        # P/E + Forward P/E
+        nextVal = soup.find("td", text="P/E").find_next_sibling("td").text
+        populateColumn('P/E', '', nextVal, ticker)
+
+        nextVal = soup.find("td", text="Forward P/E").find_next_sibling("td").text
+        populateColumn('Forward P/E', '', nextVal, ticker)
+
+        # P/S
+        nextVal = soup.find("td", text="P/S").find_next_sibling("td").text
+        populateColumn('P/S', '', nextVal, ticker)
+
+        # P/B
+        nextVal = soup.find("td", text="P/B").find_next_sibling("td").text
+        populateColumn('P/B', '', nextVal, ticker)
         
         # less important
-        # TODO Price 
         # TODO sales/share -> Sales; Shs Outstanding | Shs Float
         # TODO Sector
         # TODO POPULATE COMPANY NAME 
@@ -213,12 +250,12 @@ def computeScore_base():
     
     myThresholds = {
             "Current Ratio":    1.0,
-            "Operating Margin": 0.1,
+            "Oper. Margin": 0.1,
             "Profit Margin":    0.7,
             "Quick Ratio":      1.0,
-            "Dividend Yield":   0.01,
-            "Total Debt/Equity":0.7,
-            "Price-to-Book":    1 
+            "Dividend %":   0.01,
+            "Debt/Eq":0.7,
+            "P/B":    1 
 
     }
 
@@ -239,25 +276,21 @@ def computeDumbScore(row, thresholds):
     myScore = 0
     
     for item in thresholds:
-        if item in ['Total Debt/Equity', 'Price-to-Book']: # Lower is better
+        if item in ['Debt/Eq', 'P/B']: # Lower is better
             if float(row[item]) >= thresholds[item]:
                 myScore -= 1
-                print("+1-inverse")
             else:
-                myScore += 1
-                print("-----1-inverse")
+                myScore += 1        
         
         else: # Higher is better
             if float(row[item]) >= thresholds[item]:
                 myScore += 1
-                print("+1")
             else:
                 myScore -= 1
-                print("-----1")
-
-    if row['Current Price'] < row['Analyst Mean Target']:
+                
+    if row['Current Price'] < row['Target Price']:
         myScore += 1
-    elif row['Current Price'] >= row['Analyst Mean Target']:
+    elif row['Current Price'] >= row['Target Price']:
         myScore -= 1 
 
     return myScore
@@ -279,8 +312,9 @@ print("")
 print ("Scraping complete!!")
 print("")
 
+computeScore_base()
+
 writeScrapedDataToExcel()
 
-computeScore_base()
 print(valuations_df)
 
